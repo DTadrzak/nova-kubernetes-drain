@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	retryInterval = 2
+	retryInterval         = 2
 	novaComputeBinaryName = "nova-compute"
-	enabledString = "enabled"
-	retryNum = 3
+	enabledString         = "enabled"
+	retryNum              = 3
 )
 
 // Service is a struct which represents single Openstack service
@@ -49,10 +49,27 @@ type Hypervisor struct {
 	Enabled  bool
 }
 
-
 // NovaServer is struct which represents Nova server returned by OpenStack API
 type NovaServer struct {
-	Server servers.Server
+	Server Server
+}
+// Server is struct based on struct of Server from
+type Server struct {
+	// ID uniquely identifies this server amongst all other servers, including those not accessible to the current tenant.
+	ID string
+
+	// Updated and Created contain ISO-8601 timestamps of when the state of the server last changed, and when it was created.
+	Updated string
+	Created string
+
+	HostID string
+
+	// Status contains the current operational status of the server, such as IN_PROGRESS or ACTIVE.
+	Status string
+
+	// KeyName indicates which public key was injected into the server on launch.
+	KeyName string `json:"key_name" mapstructure:"key_name"`
+
 }
 
 // New is a constructor for Hypervisor.
@@ -69,13 +86,13 @@ func New(confPath string, timeOut int) (*Hypervisor, error) {
 	return &Hypervisor{
 		body: map[string]string{
 			"binary": "nova-compute",
-			"host": hostname,
+			"host":   hostname,
 		},
-		client:  client,
+		client:   client,
 		confPath: confPath,
 		hostname: hostname,
-		timeOut: to,
-		Enabled: true,
+		timeOut:  to,
+		Enabled:  true,
 	}, nil
 }
 
@@ -197,7 +214,7 @@ func (n *Hypervisor) isMigrated(vmID string, hostID string) (bool, error) {
 	url := n.client.ServiceURL("servers", vmID)
 	for a := 0; a < retryNum; a++ {
 		resp, err = n.client.Request("GET", url, gophercloud.RequestOpts{
-			OkCodes:  []int{200, 204},
+			OkCodes: []int{200, 204},
 		})
 		if err == nil {
 			break
@@ -210,7 +227,6 @@ func (n *Hypervisor) isMigrated(vmID string, hostID string) (bool, error) {
 	if err = getJson(resp.Body, &vm); err != nil {
 		return false, fmt.Errorf("Cannot decode JSON: %v", err)
 	}
-
 	if vm.Server.HostID != hostID {
 		return true, nil
 	}
@@ -237,7 +253,7 @@ func (h *Hypervisor) MigrateVMs() (err error) {
 			}
 
 			migrated = false
-			for counter := 0; !migrated ; counter++ {
+			for counter := 0; !migrated; counter++ {
 				migrated, err = h.isMigrated(vmID, hostID)
 				if err != nil {
 					logger.Warning.Printf("Cannot update VM: %v status: %v", vmID, err)
@@ -246,7 +262,7 @@ func (h *Hypervisor) MigrateVMs() (err error) {
 					logger.Info.Printf("VM: %v has been migrated.", vmID)
 				} else {
 					logger.Info.Printf("VM: %v has not been migrated.", vmID)
-					time.Sleep(time.Duration(counter * 10) * time.Second)
+					time.Sleep(time.Duration(counter*10) * time.Second)
 				}
 			}
 		}(vm.ID, vm.HostID)
@@ -261,9 +277,9 @@ func (h *Hypervisor) MigrateVMs() (err error) {
 	return
 }
 
-func (h *Hypervisor) migrateVMWithBM(vmID string) (migrated bool){
+func (h *Hypervisor) migrateVMWithBM(vmID string) (migrated bool) {
 	migrated = false
-	for a := 1; a < retryNum + 1; a++ {
+	for a := 1; a < retryNum+1; a++ {
 		er := adminactions.LiveMigrate(h.client, vmID, adminactions.LiveMigrateOpts{
 			BlockMigration: true,
 		})
@@ -271,20 +287,20 @@ func (h *Hypervisor) migrateVMWithBM(vmID string) (migrated bool){
 			logger.Info.Printf("Attempt: %d. Request to migrate VM with BlockMigration %s accepted\n", a, vmID)
 			migrated = true
 			break
-		// TODO(DTadrzak): compare status code to 400 when new openstack client will be released
+			// TODO(DTadrzak): compare status code to 400 when new openstack client will be released
 		} else if strings.Contains(er.Result.Err.Error(), "Block migration can not be used with shared storage.") {
 			return h.migrateVMWithoutBM(vmID)
 		}
 
 		logger.Warning.Printf("Attempt: %d. Cannot run migratation of VM %s: %v.\n", a, vmID, er.Result.Err)
-		time.Sleep(time.Duration(a * 10) * time.Second)
+		time.Sleep(time.Duration(a*10) * time.Second)
 	}
 	return
 }
 
-func (h *Hypervisor) migrateVMWithoutBM(vmID string) (migrated bool){
+func (h *Hypervisor) migrateVMWithoutBM(vmID string) (migrated bool) {
 	migrated = false
-	for a := 1; a < retryNum + 1; a++ {
+	for a := 1; a < retryNum+1; a++ {
 		er := adminactions.LiveMigrate(h.client, vmID, adminactions.LiveMigrateOpts{
 			BlockMigration: false,
 		})
@@ -295,7 +311,7 @@ func (h *Hypervisor) migrateVMWithoutBM(vmID string) (migrated bool){
 		}
 
 		logger.Warning.Printf("Attempt: %d. Cannot run migratation of VM %s: %v.\n", a, vmID, er.Result.Err)
-		time.Sleep(time.Duration(a * 10) * time.Second)
+		time.Sleep(time.Duration(a*10) * time.Second)
 	}
 	return
 }

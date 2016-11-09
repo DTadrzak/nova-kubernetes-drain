@@ -43,6 +43,8 @@ func getJson(body io.ReadCloser, target interface{}) error {
 }
 
 func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, err error) {
+	var provider *gophercloud.ProviderClient
+
 	config, err := loadConfigs(confPath)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot load variables required to create openstack client.")
@@ -56,7 +58,12 @@ func createOpenstackClient(confPath string) (client *gophercloud.ServiceClient, 
 		DomainID:         config["DomainID"],
 	}
 
-	provider, err := openstack.AuthenticatedClient(ao)
+	for a := 0; a < retryNum; a++ {
+		provider, err = openstack.AuthenticatedClient(ao)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return client, fmt.Errorf("Cannot create openstack provider: %v", err)
 	}
